@@ -8,6 +8,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Unzip uploaded zip files (if any)
+        run: |
+          for z in $(find . -maxdepth 2 -name "*.zip" -not -path "./.git/*"); do
+            echo "Unzipping $z"; mkdir -p "unzipped/$(basename "$z" .zip)"; unzip -o -q "$z" -d "unzipped/$(basename "$z" .zip)" || true
+          done
       - name: Find project folder
         run: |
           C=$(find . -name capacitor.config.json -not -path "*/node_modules/*" | head -1)
