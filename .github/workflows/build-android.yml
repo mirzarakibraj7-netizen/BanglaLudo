@@ -65,7 +65,16 @@ jobs:
           cd "$PROJ/android"
           chmod +x gradlew
           ./gradlew assembleDebug
+      - name: Find the APK
+        run: |
+          mkdir -p out
+          find . -name "*.apk" -not -path "./out/*" | tee apk-list.txt
+          F=$(grep -m1 "app-debug.apk" apk-list.txt || true)
+          if [ -z "$F" ]; then echo "❌ APK পাওয়া যায়নি"; exit 1; fi
+          cp "$F" out/BANGLA-LUDO.apk
+          ls -la out
       - uses: actions/upload-artifact@v4
         with:
-          name: BANGLA-LUDO-apk
-          path: ${{ env.PROJ }}/android/app/build/outputs/apk/debug/app-debug.apkapk
+          name: BANGLA-LUDO-apk-run${{ github.run_number }}
+          path: out/BANGLA-LUDO.apk
+          if-no-files-found: error
