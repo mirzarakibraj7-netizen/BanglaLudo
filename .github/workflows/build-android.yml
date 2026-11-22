@@ -10,9 +10,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Unzip uploaded zip files (if any)
         run: |
-          for z in $(find . -maxdepth 2 -name "*.zip" -not -path "./.git/*"); do
-            echo "Unzipping $z"; mkdir -p "unzipped/$(basename "$z" .zip)"; unzip -o -q "$z" -d "unzipped/$(basename "$z" .zip)" || true
+          n=0
+          find . -maxdepth 2 -iname "*.zip" -not -path "./.git/*" -print0 | while IFS= read -r -d '' z; do
+            n=$((n+1)); echo "Unzipping: $z"; mkdir -p "unzipped/z$n"; unzip -o -q "$z" -d "unzipped/z$n" || true
           done
+          find unzipped -maxdepth 4 2>/dev/null | head -30 || true
       - name: Find project folder
         run: |
           C=$(find . -name capacitor.config.json -not -path "*/node_modules/*" | head -1)
