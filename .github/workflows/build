@@ -1,0 +1,80 @@
+name: Build APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unzip uploaded zip files (if any)
+        run: |
+          n=0
+          find . -maxdepth 2 -iname "*.zip" -not -path "./.git/*" -print0 | while IFS= read -r -d '' z; do
+            n=$((n+1)); echo "Unzipping: $z"; mkdir -p "unzipped/z$n"; unzip -o -q "$z" -d "unzipped/z$n" || true
+          done
+          find unzipped -maxdepth 4 2>/dev/null | head -30 || true
+      - name: Find project folder
+        run: |
+          BEST=""
+          while IFS= read -r C; do
+            D=$(dirname "$C"); echo "পাওয়া গেছে: $D"
+            if [ -d "$D/android-res" ]; then BEST="$D"; fi
+          done < <(find . -name capacitor.config.json -not -path "*/node_modules/*")
+          if [ -z "$BEST" ]; then
+            echo "❌ নতুন প্রজেক্ট (android-res সহ) পাওয়া যায়নি। repository থেকে পুরনো zip মুছে নতুন BANGLA-LUDO-Android zip আপলোড করুন।"
+            find . -maxdepth 3 -not -path "./.git/*" | head -50; exit 1
+          fi
+          echo "PROJ=$BEST" >> "$GITHUB_ENV"
+          echo "✅ ব্যবহার হচ্ছে: $BEST"; ls -la "$BEST"
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - name: Install and create Android project
+        run: |
+          cd "$PROJ"
+          ls package.json www/index.html
+          npm install
+          npx cap add android
+          npx cap sync android
+      - name: Apply app icon
+        run: |
+          cd "$PROJ"
+          test -d android-res
+          cp -r android-res/* android/app/src/main/res/
+          echo "✅ আইকন কপি হয়েছে"
+          rm -rf android/app/src/main/res/mipmap-anydpi-v26
+          ls android/app/src/main/res | head -30
+      - name: Add AdMob App ID to manifest
+        run: |
+          cd "$PROJ"
+          python3 - <<'PY'
+          p="android/app/src/main/AndroidManifest.xml"
+          s=open(p,encoding="utf-8").read()
+          tag='<meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-7808329877913294~9456707590"/>'
+          if "APPLICATION_ID" not in s:
+              i=s.index("<application"); j=s.index(">",i)+1
+              s=s[:j]+"\n        "+tag+s[j:]
+          open(p,"w",encoding="utf-8").write(s)
+          PY
+          grep APPLICATION_ID android/app/src/main/AndroidManifest.xml
+      - name: Build debug APK
+        run: |
+          cd "$PROJ/android"
+          chmod +x gradlew
+          ./gradlew assembleDebug
+      - name: Find the APK
+        run: |
+          mkdir -p out
+          find . -name "*.apk" -not -path "./out/*" | tee apk-list.txt
+          F=$(grep -m1 "app-debug.apk" apk-list.txt || true)
+          if [ -z "$F" ]; then echo "❌ APK পাওয়া যায়নি"; exit 1; fi
+          cp "$F" out/BANGLA-LUDO.apk
+          ls -la out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BANGLA-LUDO-apk-run${{ github.run_number }}
+          path: out/BANGLA-LUDO.apk
+          if-no-files-found: error
